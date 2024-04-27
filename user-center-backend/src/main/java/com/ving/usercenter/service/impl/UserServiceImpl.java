@@ -49,12 +49,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     public long userRegister(String userAccount, String userPassword, String checkPassword,String schoolCode) {
         // 1. 校验
         if (StringUtils.isAnyBlank(userAccount,userPassword,checkPassword,schoolCode)){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"参数为空");
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR,"参数为空");
         }
         if (userAccount.length() < 4){
             throw new BusinessException(ErrorCode.PARAMS_ERROR,"用户账号过短");
         }
-        if (userPassword.length() < 8 || checkPassword.length() < 8){
+        if (userPassword.length() < 8){
             throw new BusinessException(ErrorCode.PARAMS_ERROR,"用户密码过短");
         }
         if(schoolCode.length() != 10 ){
@@ -68,7 +68,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.PARAMS_ERROR,"账号输入有误");
         }
         //密码和校验密码相同
-        if (userPassword.equals(checkPassword)){
+        if (!userPassword.equals(checkPassword)){
             throw new BusinessException(ErrorCode.PARAMS_ERROR,"校验密码不一致");
         }
         //账户不能重复
@@ -94,8 +94,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         user.setSchoolCode(schoolCode);
         boolean saveResult = this.save(user);
         if (!saveResult){
-            //TODO: 用户保存数据库失败
-           throw new BusinessException(ErrorCode.PARAMS_ERROR,"");
+           throw new BusinessException(ErrorCode.SYSTEM_ERROR ,"注册失败");
         }
 
         return user.getId();
@@ -105,22 +104,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public User userLogin(String userAccount, String userPassword, HttpServletRequest request) {
         // 1. 校验
-        //TODO：需要改为自定义异常
         if (StringUtils.isAnyBlank(userAccount,userPassword)){
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR,"账号密码不能为空");
         }
         if (userAccount.length() < 4){
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"账号长度过短");
         }
         if (userPassword.length() < 8 ){
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"密码长度过短");
         }
         //账户不能包含特殊字符
-        String validPattern = "[^\\w\\s]";
+        String validPattern = "[`~!@#$%^&*()+=|{}':;',\\\\[\\\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。，、？]";
 
         Matcher matcher = Pattern.compile(validPattern).matcher(userAccount);
         if(matcher.find()){
-            return  null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"输入账号不合法");
         }
         //2. 加密
         String encryptPassword = DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
@@ -132,7 +130,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 用户不存在
         if(user == null){
             log.info("user login failed,userAccount cannot match userPassword");
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"输入密码不正确");
         }
         //3.用户脱敏
         User safetyUser = getSafetyUser(user);
@@ -165,10 +163,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public Boolean removeById(long id, HttpServletRequest request) {
         if(isAdmin(request)){
-            throw  new BusinessException(ErrorCode.NO_AUTH);
+            throw  new BusinessException(ErrorCode.NO_AUTH,"无权限");
         }
         if(id <= 0){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"该用户不存在");
         }
         boolean removed = removeById(id);
         return removed;
@@ -185,7 +183,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         Object userObject = request.getSession().getAttribute(USER_LOGIN_STATE);
         User user = (User) userObject;
         if(user == null || user.getUserRole() != ADMIN_ROLE){
-            return  false;
+            throw new BusinessException(ErrorCode.NO_AUTH,"无权限访问");
         }
         return true ;
     }

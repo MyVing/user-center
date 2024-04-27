@@ -69,4 +69,23 @@ class UserServiceTest {
         Assertions.assertEquals(-1,result);
 
     }
+
+    @Test
+    public void testUpdateUser(){
+        User user = new User();
+        user.setId(1L);
+        user.setUsername("testVing");
+        user.setUserAccount("123");
+        user.setAvatarUrl("");
+        user.setGender(0);
+        user.setUserPassword("xxx");
+        user.setPhone("123");
+        user.setEmail("456");
+        user.setUserStatus(0);
+        boolean res = userService.updateById(user);
+        Assertions.assertTrue(res);
+
+
+    }
+
 }

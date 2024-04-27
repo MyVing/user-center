@@ -45,7 +45,7 @@ public class UserController {
         String checkPassword = userRegisterRequest.getCheckPassword();
         String schoolCode = userRegisterRequest.getSchoolCode();
         if (StringUtils.isAnyBlank(userAccount,userPassword,checkPassword,schoolCode)){
-             return null;
+             throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR);
         }
        long result = userService.userRegister(userAccount, userPassword, checkPassword,schoolCode);
         return ResultUtils.success(result);
@@ -54,12 +54,12 @@ public class UserController {
     @PostMapping("/login")
     public BaseResponse<User> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request){
         if (userLoginRequest == null){
-            return ResultUtils.error(ErrorCode.PARAMS_ERROR);
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR);
         }
         String userAccount = userLoginRequest.getUserAccount();
         String userPassword = userLoginRequest.getUserPassword();
         if (StringUtils.isAnyBlank(userAccount,userPassword)){
-            return ResultUtils.error(ErrorCode.PARAMS_ERROR);
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR,"账号密码不能为空");
         }
         User user =userService.userLogin(userAccount, userPassword, request);
        // return new BaseResponse<>(0,user,"ok");
