@@ -63,6 +63,9 @@ public class UserController {
         }
         User user =userService.userLogin(userAccount, userPassword, request);
        // return new BaseResponse<>(0,user,"ok");
+        if(user == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"该用户不存在");
+        }
         return ResultUtils.success(user);
     }
 

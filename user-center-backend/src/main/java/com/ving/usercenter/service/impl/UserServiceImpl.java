@@ -130,7 +130,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 用户不存在
         if(user == null){
             log.info("user login failed,userAccount cannot match userPassword");
-            throw new BusinessException(ErrorCode.PARAMS_ERROR,"输入密码不正确");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"账号密码错误!");
         }
         //3.用户脱敏
         User safetyUser = getSafetyUser(user);
