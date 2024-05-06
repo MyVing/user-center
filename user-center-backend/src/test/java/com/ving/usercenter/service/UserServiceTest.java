@@ -1,7 +1,10 @@
 package com.ving.usercenter.service;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
 import com.ving.usercenter.model.domain.User;
+import org.junit.Assert;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -87,5 +90,13 @@ class UserServiceTest {
 
 
     }
+
+    @Test
+    public void testsearchUserByTags(){
+        List<String> tagNameList = Arrays.asList("java","python");
+        List<User> userList = userService.searchUserByTags(tagNameList);
+        Assert.assertNotNull(userList);
+    }
+
 
 }

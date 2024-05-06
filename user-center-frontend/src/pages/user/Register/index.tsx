@@ -52,7 +52,7 @@ const Register: React.FC = () => {
             }
           }}
           logo={<img alt="logo" src={SYSTEM_LOGO}/>}
-          title="ving的用户管理系统"
+          title="ving的学生管理系统"
           initialValues={{
             autoLogin: true,
           }}

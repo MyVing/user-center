@@ -86,6 +86,11 @@ public class User implements Serializable {
      */
     private String schoolCode;
 
+    /**
+     * 标签列表json
+     */
+    private String tags;
+
     @TableField(exist = false)
     private static final long serialVersionUID = 1L;
 }
