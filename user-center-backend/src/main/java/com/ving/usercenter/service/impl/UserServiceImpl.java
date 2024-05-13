@@ -6,15 +6,18 @@ import com.google.gson.Gson;
 import com.google.gson.TypeAdapter;
 import com.google.gson.reflect.TypeToken;
 import com.ving.usercenter.common.ErrorCode;
+import com.ving.usercenter.constant.UserConstant;
 import com.ving.usercenter.exception.BusinessException;
 import com.ving.usercenter.service.UserService;
 import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -184,7 +187,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @param request
      * @return
      */
-    private boolean isAdmin(HttpServletRequest request){
+    public boolean isAdmin( HttpServletRequest request){
         //仅管理员可查询
         Object userObject = request.getSession().getAttribute(USER_LOGIN_STATE);
         User user = (User) userObject;
@@ -192,6 +195,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.NO_AUTH,"无权限访问");
         }
         return true ;
+    }
+
+    /**
+     * 是否为管理员
+     *
+     * @param loginUser
+     * @return
+     */
+    public boolean isAdmin(User loginUser){
+        return loginUser != null && loginUser.getUserRole() == ADMIN_ROLE;
     }
 
     /**
@@ -264,6 +277,39 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         }).map(this::getSafetyUser).collect(Collectors.toList());
         //return userList.stream().map(this::getSafetyUser).collect(Collectors.toList());
 
+    }
+
+    @Override
+    public int updateUser(@RequestBody User user, User loginUser) {
+        Long userId = user.getId();
+        if(userId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        //如果是管理员，允许更新任意用户
+        //如果不是管理员，只允许更新当前（自己的）信息
+        if(!isAdmin(loginUser) && userId != loginUser.getId()){
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        User oldUser = userMapper.selectById(userId);
+        if(oldUser == null){
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR);
+        }
+        return userMapper.updateById(user);
+
+
+
+    }
+
+    @Override
+    public User getLoginUser(HttpServletRequest request) {
+        if(request == null){
+            return null;
+        }
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        if(userObj == null){
+            throw  new BusinessException(ErrorCode.NO_AUTH);
+        }
+        return (User) userObj;
     }
 
 

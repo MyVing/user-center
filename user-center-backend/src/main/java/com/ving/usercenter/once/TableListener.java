@@ -11,7 +11,7 @@ public class TableListener implements ReadListener<UserCenterTableInfo> {
     /**
      * 这个每一条数据解析都会来调用
      *
-     * @param data    one row value. Is is same as {@link AnalysisContext#readRowHolder()}
+     * @param data    one row value. Is  same as {@link AnalysisContext#readRowHolder()}
      * @param context
      */
     @Override

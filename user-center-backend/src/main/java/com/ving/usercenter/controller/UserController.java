@@ -82,6 +82,7 @@ public class UserController {
         return ResultUtils.success(result);
     }
 
+
     @GetMapping("/current")
     public BaseResponse<User> getCurrentUser(HttpServletRequest request){
         Object userObject = request.getSession().getAttribute(USER_LOGIN_STATE);
@@ -90,7 +91,7 @@ public class UserController {
             return  null;
         }
         long userId = currentUser.getId();
-        //todo：校验用户是否合法
+        //：校验用户是否合法
         User user = userService.getById(userId);
         User safetyUser = userService.getSafetyUser(user);
         return ResultUtils.success(safetyUser);
@@ -130,6 +131,22 @@ public class UserController {
         return ResultUtils.success(b);
     }
 
+    @PostMapping("/update")
+    public BaseResponse<Integer> updateUser(User user,HttpServletRequest request){
+        //1. 校验参数是否为空
+        if(user == null){
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        int result = userService.updateUser(user,loginUser);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 是否为管理员
+     * @param request
+     * @return
+     */
     private boolean isAdmin(HttpServletRequest request){
         //仅管理员可查询
         Object userObject = request.getSession().getAttribute(USER_LOGIN_STATE);
