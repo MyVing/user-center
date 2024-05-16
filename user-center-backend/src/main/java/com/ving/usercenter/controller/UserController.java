@@ -11,8 +11,10 @@ import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.domain.request.UserLoginRequest;
 import com.ving.usercenter.model.domain.request.UserRegisterRequest;
 import com.ving.usercenter.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +23,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.ving.usercenter.constant.UserConstant.ADMIN_ROLE;
@@ -35,10 +38,14 @@ import static com.ving.usercenter.constant.UserConstant.USER_LOGIN_STATE;
 @RestController
 @RequestMapping("/user")
 @CrossOrigin(origins = {"http://localhost:3000"})
+@Slf4j
 public class UserController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private RedisTemplate<String,Object> redisTemplate;
 
     @PostMapping("/register")
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
@@ -129,9 +136,23 @@ public class UserController {
 
     @GetMapping("/recommend")
     public BaseResponse<Page<User>> recommendUsers(long pageSize, long pageNum, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+
+        //如果有缓存，直接读缓存
+        String redisKey = String.format("partner:user:recommend:%s",loginUser.getId());
+        Page<User> userPage = (Page<User> )redisTemplate.opsForValue().get(redisKey);
+        if(userPage != null){
+            return ResultUtils.success(userPage);
+        }
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        Page<User> userList = userService.page(new Page<>(pageNum , pageSize), queryWrapper);
-       return ResultUtils.success(userList);
+        userPage = userService.page(new Page<>(pageNum , pageSize), queryWrapper);
+        //没有缓存，需要查到后写缓存
+        try {
+            redisTemplate.opsForValue().set(redisKey,userPage,30000, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("redis set key error",e);
+        }
+        return ResultUtils.success(userPage);
     }
 
     @PostMapping("/delete")

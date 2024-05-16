@@ -84,12 +84,14 @@ public class InsertUserTest {
                 user.setUserRole(0);
                 user.setSchoolCode("3122004611");
                 user.setTags("[]");
+                userList.add(user);
                 if (j % batchSize == 0) {
                     break;
                 }
             }
             //异步执行
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                System.out.println("threadName:"+Thread.currentThread().getName());
                 userService.saveBatch(userList, batchSize);
             },executorService);
             futureList.add(future);
