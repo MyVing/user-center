@@ -13,13 +13,14 @@ create table user
     userStatus   int      default 0                 null comment '用户状态 0 - 正常',
     createTime   datetime default CURRENT_TIMESTAMP null comment '创建时间',
     updateTime   datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP,
-    isDelete     tinyint  default 0                 null comment '是否删除',
-    userRole     int      default 0                 null comment '用户角色0 - 普通用户 1 - 管理员',
+    isDelete     tinyint  default 0                 not null comment '是否删除',
+    userRole     int      default 0                 not null comment '用户角色0 - 普通用户 1 - 管理员',
     schoolCode   varchar(512)                       null comment '学号'
 )
     comment '用户';
 
-alter table user add column tags varchar(1024) null comment  '标签列表';
+alter table user
+    add column tags varchar(1024) null comment '标签列表';
 
 -- auto-generated definition
 create table tag
@@ -32,7 +33,7 @@ create table tag
     isParent   tinyint                            null comment '0-不是，1-父标签',
     createTime datetime default CURRENT_TIMESTAMP null comment '创建时间',
     updateTime datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP,
-    isDelete   tinyint  default 0                 null comment '是否删除',
+    isDelete   tinyint  default 0                 not null comment '是否删除',
     constraint uniIdx_tagName
         unique (tagName)
 )
@@ -40,4 +41,20 @@ create table tag
 
 create index idx__userId
     on tag (userId);
+
+
+-- 队伍表
+create table user_team
+(
+    id         bigint auto_increment comment 'id' primary key,
+    userId     bigint comment '用户id',
+    teamId     bigint comment '队伍id',
+    joinTime   datetime                           null comment '创建时间',
+    createTime datetime default CURRENT_TIMESTAMP null comment '创建时间',
+    updateTime datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP,
+    isDelete   tinyint  default 0                 not null comment '是否删除'
+
+)
+    comment '用户队伍关系' charset = utf8;
+
 
