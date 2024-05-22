@@ -10,6 +10,7 @@ import com.ving.usercenter.model.domain.Team;
 import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.dto.TeamQuery;
 import com.ving.usercenter.model.request.TeamAddRequest;
+import com.ving.usercenter.model.vo.TeamUserVO;
 import com.ving.usercenter.service.TeamService;
 import com.ving.usercenter.service.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -88,7 +89,7 @@ public class TeamController {
 
     }
 
-    @GetMapping("/list")
+   /* @GetMapping("/list")
     public BaseResponse<List<Team>> listTeams(TeamQuery teamQuery){
         if(teamQuery == null){
             throw  new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -98,6 +99,16 @@ public class TeamController {
         QueryWrapper<Team> queryWrapper = new QueryWrapper<>(team);
         //不支持模糊查询
         List<Team> teamList = teamService.list(queryWrapper);
+        return ResultUtils.success(teamList);
+    }*/
+
+    @GetMapping("/list")
+    public BaseResponse<List<TeamUserVO>> listTeams(TeamQuery teamQuery,HttpServletRequest request){
+        if(teamQuery == null){
+            throw  new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        boolean isAdmin = userService.isAdmin(request);
+        List<TeamUserVO> teamList = teamService.listTeams(teamQuery,isAdmin);
         return ResultUtils.success(teamList);
     }
 

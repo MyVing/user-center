@@ -192,7 +192,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         Object userObject = request.getSession().getAttribute(USER_LOGIN_STATE);
         User user = (User) userObject;
         if(user == null || user.getUserRole() != ADMIN_ROLE){
-            throw new BusinessException(ErrorCode.NO_AUTH,"无权限访问");
+            return false;
         }
         return true ;
     }
