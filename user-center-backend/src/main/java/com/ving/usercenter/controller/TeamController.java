@@ -10,6 +10,7 @@ import com.ving.usercenter.model.domain.Team;
 import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.dto.TeamQuery;
 import com.ving.usercenter.model.request.TeamAddRequest;
+import com.ving.usercenter.model.request.TeamJoinRequest;
 import com.ving.usercenter.model.request.TeamUpdateRequest;
 import com.ving.usercenter.model.vo.TeamUserVO;
 import com.ving.usercenter.service.TeamService;
@@ -128,6 +129,16 @@ public class TeamController {
         return ResultUtils.success(resultPage);
     }
 
+    @PostMapping("/join")
+    public BaseResponse<Boolean> joinTeam(@RequestBody TeamJoinRequest teamJoinRequest,HttpServletRequest request){
+        if(teamJoinRequest == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        boolean result = teamService.joinTeam(teamJoinRequest,loginUser);
+        return ResultUtils.success(result);
+
+    }
 
 
 }
