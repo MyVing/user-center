@@ -9,6 +9,7 @@ import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.domain.UserTeam;
 import com.ving.usercenter.model.dto.TeamQuery;
 import com.ving.usercenter.model.enums.TeamStatusEnum;
+import com.ving.usercenter.model.request.TeamUpdateRequest;
 import com.ving.usercenter.model.vo.TeamUserVO;
 import com.ving.usercenter.model.vo.UserVO;
 import com.ving.usercenter.service.TeamService;
@@ -20,10 +21,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -192,6 +191,36 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
 
         }
         return teamUserVOList;
+
+    }
+
+    @Override
+    public boolean updateTeam(TeamUpdateRequest teamUpdateRequest, User loginUser) {
+        if (teamUpdateRequest == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Long id = teamUpdateRequest.getId();
+        if(id==null || id <= 0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Team oldTeam = this.getById(id);
+        if(oldTeam == null){
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR,"队伍不存在!");
+        }
+        //只有管理员或者队伍的创建者可以修改
+        if(oldTeam.getUserId() != loginUser.getId() && userService.isAdmin(loginUser)){
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        TeamStatusEnum statusEnum = TeamStatusEnum.getEnumByValue(teamUpdateRequest.getStatus());
+        if(statusEnum.equals(TeamStatusEnum.SECRET)){
+            if(StringUtils.isNotBlank(teamUpdateRequest.getPassword())){
+                throw new BusinessException(ErrorCode.PARAMS_ERROR,"加密房间必须要设置密码!");
+            }
+        }
+        Team updateTeam = new Team();
+        BeanUtils.copyProperties(teamUpdateRequest,updateTeam);
+        boolean result = this.updateById(updateTeam);
+        return result;
 
     }
 }

@@ -4,6 +4,7 @@ import com.ving.usercenter.model.domain.Team;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.dto.TeamQuery;
+import com.ving.usercenter.model.request.TeamUpdateRequest;
 import com.ving.usercenter.model.vo.TeamUserVO;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,4 +37,12 @@ public interface TeamService extends IService<Team> {
      * @return
      */
     List<TeamUserVO> listTeams(TeamQuery teamQuery,boolean isAdmin);
+
+    /**
+     * 更新队伍
+     * @param teamUpdateRequest
+     * @param loginUser
+     * @return
+     */
+    boolean updateTeam(TeamUpdateRequest teamUpdateRequest, User loginUser);
 }
