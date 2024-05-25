@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.dto.TeamQuery;
 import com.ving.usercenter.model.request.TeamJoinRequest;
+import com.ving.usercenter.model.request.TeamQuitRequest;
 import com.ving.usercenter.model.request.TeamUpdateRequest;
 import com.ving.usercenter.model.vo.TeamUserVO;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,4 +54,20 @@ public interface TeamService extends IService<Team> {
      * @return
      */
     boolean joinTeam(TeamJoinRequest teamJoinRequest,User loginUser);
+
+    /**
+     * 退出队伍
+     * @param teamQuitRequest
+     * @param loginUser
+     * @return
+     */
+    boolean quitTeam(TeamQuitRequest teamQuitRequest, User loginUser);
+
+    /**
+     * 删除（解散）队伍
+     * @param id
+     * @param loginUser
+     * @return
+     */
+    boolean deleteTeam(long id,User loginUser);
 }

@@ -9,6 +9,7 @@ import com.ving.usercenter.exception.BusinessException;
 import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.model.request.UserLoginRequest;
 import com.ving.usercenter.model.request.UserRegisterRequest;
+import com.ving.usercenter.model.vo.UserVO;
 import com.ving.usercenter.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -42,7 +43,7 @@ public class UserController {
     private UserService userService;
 
     @Resource
-    private RedisTemplate<String,Object> redisTemplate;
+    private RedisTemplate<String, Object> redisTemplate;
 
     @PostMapping("/register")
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
@@ -131,23 +132,24 @@ public class UserController {
         return ResultUtils.success(userList);
     }
 
+    //TODO:推荐多个，未实现
     @GetMapping("/recommend")
     public BaseResponse<Page<User>> recommendUsers(long pageSize, long pageNum, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
 
         //如果有缓存，直接读缓存
-        String redisKey = String.format("partner:user:recommend:%s",loginUser.getId());
-        Page<User> userPage = (Page<User> )redisTemplate.opsForValue().get(redisKey);
-        if(userPage != null){
+        String redisKey = String.format("partner:user:recommend:%s", loginUser.getId());
+        Page<User> userPage = (Page<User>) redisTemplate.opsForValue().get(redisKey);
+        if (userPage != null) {
             return ResultUtils.success(userPage);
         }
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        userPage = userService.page(new Page<>(pageNum , pageSize), queryWrapper);
+        userPage = userService.page(new Page<>(pageNum, pageSize), queryWrapper);
         //没有缓存，需要查到后写缓存
         try {
-            redisTemplate.opsForValue().set(redisKey,userPage,30000, TimeUnit.SECONDS);
+            redisTemplate.opsForValue().set(redisKey, userPage, 30000, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.error("redis set key error",e);
+            log.error("redis set key error", e);
         }
         return ResultUtils.success(userPage);
     }
@@ -184,6 +186,22 @@ public class UserController {
             return false;
         }
         return true;
+    }
+
+    /**
+     * 获取最匹配的用户
+     *
+     * @param num
+     * @param request
+     * @return
+     */
+    @GetMapping("/match")
+    public BaseResponse<List<User>> matchUsers(long num, HttpServletRequest request) {
+        if(num <=0 || num > 20){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        return ResultUtils.success(userService.matchUsers(num,loginUser));
     }
 
 }

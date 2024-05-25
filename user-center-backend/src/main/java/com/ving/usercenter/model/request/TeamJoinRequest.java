@@ -6,7 +6,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 用户登陆请求体
+ * 用户加入队伍请求体
  *
  * @Author ving
  * @Date 2024/1/27 20:10
