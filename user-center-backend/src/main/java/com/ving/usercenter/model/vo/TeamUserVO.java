@@ -1,14 +1,9 @@
 package com.ving.usercenter.model.vo;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
-import java.util.List;
 
 /**
  * 队伍和用户信息封装类（脱敏）
@@ -68,7 +63,12 @@ public class TeamUserVO implements Serializable {
     /**
      * 创建人用户信息
      */
-    UserVO createUser;
+    private UserVO createUser;
+
+    /**
+     * 加入的用户数
+     */
+    private Integer hasJoinNum;
 
     /**
      * 是否已加入队伍
