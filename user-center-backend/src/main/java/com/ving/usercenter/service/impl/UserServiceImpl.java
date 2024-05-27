@@ -1,26 +1,29 @@
 package com.ving.usercenter.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.lang.Pair;
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.gson.Gson;
-import com.google.gson.TypeAdapter;
 import com.google.gson.reflect.TypeToken;
+
 import com.ving.usercenter.common.ErrorCode;
 import com.ving.usercenter.constant.UserConstant;
 import com.ving.usercenter.exception.BusinessException;
-import com.ving.usercenter.model.vo.UserVO;
-import com.ving.usercenter.service.UserService;
-import com.ving.usercenter.model.domain.User;
 import com.ving.usercenter.mapper.UserMapper;
+import com.ving.usercenter.model.domain.User;
+import com.ving.usercenter.service.UserService;
 import com.ving.usercenter.utils.AlgorithmUtils;
-import javafx.util.Pair;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -28,232 +31,158 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.ving.usercenter.constant.UserConstant.ADMIN_ROLE;
 import static com.ving.usercenter.constant.UserConstant.USER_LOGIN_STATE;
 
+
 /**
  * 用户服务实现类
- *
- * @author ving
- * @description 针对表【user(用户)】的数据库操作Service实现
- * @createDate 2024-01-26 18:56:04
  */
 @Service
 @Slf4j
-public class UserServiceImpl extends ServiceImpl<UserMapper, User>
-        implements UserService {
+public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService
+{
 
     @Resource
     private UserMapper userMapper;
+    @Resource
+    private HttpServletRequest request;
+
+    @Resource
+    private RedisTemplate redisTemplate;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
 
     /**
-     * 盐值：混淆密码
+     * 盐值，混淆密码
      */
     private static final String SALT = "ving";
 
-
+    /**
+     * 用户注册
+     *
+     * @param userAccount   用户账户
+     * @param userPassword  用户密码
+     * @param checkPassword 校验密码
+     * @param schoolCode    星球编号
+     * @return 新用户 id
+     */
     @Override
-    public long userRegister(String userAccount, String userPassword, String checkPassword, String schoolCode) {
+    public long userRegister(String userAccount, String userPassword, String checkPassword, String schoolCode)
+    {
         // 1. 校验
-        if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword, schoolCode)) {
-            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR, "参数为空");
+        if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword, schoolCode))
+        {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
-        if (userAccount.length() < 4) {
+        if (userAccount.length() < 4)
+        {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户账号过短");
         }
-        if (userPassword.length() < 8) {
+        if (userPassword.length() < 8 || checkPassword.length() < 8)
+        {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户密码过短");
         }
-        if (schoolCode.length() != 10) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学号格式错误");
+        if (schoolCode.length() > 5)
+        {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "星球编号过长");
         }
-        //账户不能包含特殊字符
-        String validPattern = "[^\\w\\s]";
-
+        // 账户不能包含特殊字符
+        String validPattern = "[`~!@#$%^&*()+=|{}':;',\\\\[\\\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。，、？]";
         Matcher matcher = Pattern.compile(validPattern).matcher(userAccount);
-        if (matcher.find()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号输入有误");
+        if (matcher.find())
+        {
+            return -1;
         }
-        //密码和校验密码相同
-        if (!userPassword.equals(checkPassword)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "校验密码不一致");
+        // 密码和校验密码相同
+        if (!userPassword.equals(checkPassword))
+        {
+            return -1;
         }
-        //账户不能重复
+        // 账户不能重复
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("userAccount", userAccount);
         long count = userMapper.selectCount(queryWrapper);
-        if (count > 0) { //表明已经有人注册了
+        if (count > 0)
+        {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
         }
-        //学号不能重复
+        // 星球编号不能重复
         queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("schoolCode", schoolCode);
         count = userMapper.selectCount(queryWrapper);
-        if (count > 0) { //表明已经有人注册了
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "学号重复");
+        if (count > 0)
+        {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "编号重复");
         }
-        //2. 加密
+        // 2. 加密
         String encryptPassword = DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
-        //3. 插入数据
+        // 3. 插入数据
         User user = new User();
         user.setUserAccount(userAccount);
         user.setUserPassword(encryptPassword);
         user.setSchoolCode(schoolCode);
         boolean saveResult = this.save(user);
-        if (!saveResult) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败");
+        if (!saveResult)
+        {
+            return -1;
         }
-
         return user.getId();
-
     }
 
-    @Override
-    public User userLogin(String userAccount, String userPassword, HttpServletRequest request) {
-        // 1. 校验
-        if (StringUtils.isAnyBlank(userAccount, userPassword)) {
-            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR, "账号密码不能为空");
-        }
-        if (userAccount.length() < 4) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号长度过短");
-        }
-        if (userPassword.length() < 8) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度过短");
-        }
-        //账户不能包含特殊字符
-        String validPattern = "[`~!@#$%^&*()+=|{}':;',\\\\[\\\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。，、？]";
 
-        Matcher matcher = Pattern.compile(validPattern).matcher(userAccount);
-        if (matcher.find()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "输入账号不合法");
+    /**
+     * 用户登录
+     *
+     * @param userAccount  用户账户
+     * @param userPassword 用户密码
+     * @param request
+     * @return 脱敏后的用户信息
+     */
+    @Override
+    public User userLogin(String userAccount, String userPassword, HttpServletRequest request)
+    {
+        // 1. 校验
+        if (StringUtils.isAnyBlank(userAccount, userPassword))
+        {
+            return null;
         }
-        //2. 加密
+        if (userAccount.length() < 4)
+        {
+            return null;
+        }
+        if (userPassword.length() < 8)
+        {
+            return null;
+        }
+        // 账户不能包含特殊字符
+        String validPattern = "[`~!@#$%^&*()+=|{}':;',\\\\[\\\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。，、？]";
+        Matcher matcher = Pattern.compile(validPattern).matcher(userAccount);
+        if (matcher.find())
+        {
+            return null;
+        }
+        // 2. 加密
         String encryptPassword = DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
-        //查询用户是否存在
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("userAccount", userAccount);
-        queryWrapper.eq("userPassword", encryptPassword);
+        // 查询用户是否存在
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getUserAccount, userAccount);
+        queryWrapper.eq(User::getUserPassword, encryptPassword);
         User user = userMapper.selectOne(queryWrapper);
         // 用户不存在
-        if (user == null) {
-            log.info("user login failed,userAccount cannot match userPassword");
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号密码错误!");
+        if (user == null)
+        {
+            log.info("user login failed, userAccount cannot match userPassword");
+            return null;
         }
-        //3.用户脱敏
+        // 3. 用户脱敏
         User safetyUser = getSafetyUser(user);
-        //4.记录用户的登陆态
+        // 4. 记录用户的登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, safetyUser);
         return safetyUser;
-    }
-
-    @Override
-    public List<User> searchUsers(String username, HttpServletRequest request) {
-        if (!isAdmin(request)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        if (StringUtils.isNotBlank(username)) {
-            queryWrapper.like("username", username);
-        }
-        List<User> userList = list(queryWrapper);
-        List<User> list = userList.stream().map(user -> getSafetyUser(user)).collect(Collectors.toList());
-        return list;
-    }
-
-    /**
-     * 根据Id删除用户
-     *
-     * @param id
-     * @param request
-     * @return
-     */
-    @Override
-    public Boolean removeById(long id, HttpServletRequest request) {
-        if (isAdmin(request)) {
-            throw new BusinessException(ErrorCode.NO_AUTH, "无权限");
-        }
-        if (id <= 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该用户不存在");
-        }
-        boolean removed = removeById(id);
-        return removed;
-    }
-
-    /**
-     * 是否为管理员
-     *
-     * @param request
-     * @return
-     */
-    public boolean isAdmin(HttpServletRequest request) {
-        //仅管理员可查询
-        Object userObject = request.getSession().getAttribute(USER_LOGIN_STATE);
-        User user = (User) userObject;
-        if (user == null || user.getUserRole() != ADMIN_ROLE) {
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * 是否为管理员
-     *
-     * @param loginUser
-     * @return
-     */
-    public boolean isAdmin(User loginUser) {
-        return loginUser != null && loginUser.getUserRole() == ADMIN_ROLE;
-    }
-
-    @Override
-    public List<User> matchUsers(long num, User loginUser) {
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.select("id", "tags");
-        queryWrapper.isNotNull("tags");
-        List<User> userList = this.list(queryWrapper);
-        String tags = loginUser.getTags();
-        Gson gson = new Gson();
-        List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {
-        }.getType());
-        //用户列表的下标 ==> 相似度
-        List<Pair<User, Long>> list = new ArrayList<>();
-        //依次计算所有用户和当前用户的相似度
-        for (int i = 0; i < userList.size(); i++) {
-            User user = userList.get(i);
-
-            String userTags = user.getTags();
-            //无标签或者为当前用户自己
-            if (StringUtils.isBlank(userTags) || user.getId() == loginUser.getId()) {
-                continue;
-            }
-            List<String> userTagList = gson.fromJson(userTags, new TypeToken<List<String>>() {
-            }.getType());
-            //计算分数
-            long distance = AlgorithmUtils.minDistance(tagList, userTagList);
-            list.add(new Pair<>(user, distance));
-        }
-        //按编辑距离由小到大排序
-        List<Pair<User, Long>> topUserPairList = list.stream()
-                .sorted((a, b) -> (int) (a.getValue() - b.getValue())).limit(num)
-                .collect(Collectors.toList());
-        //原本顺序的 userId 列表
-        List<Long> userIdList = topUserPairList.stream().map(pair -> pair.getKey().getId()).collect(Collectors.toList());
-        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
-        userQueryWrapper.in("id", userIdList);
-
-        Map<Long, List<User>> userIdUserListMap = this.list(userQueryWrapper)
-                .stream()
-                .map(user -> getSafetyUser(user))
-                .collect(Collectors.groupingBy(User::getId));
-        List<User> finalUserList = new ArrayList<>();
-        for (Long userId : userIdList) {
-            finalUserList.add(userIdUserListMap.get(userId).get(0));
-        }
-        return finalUserList ;
-
     }
 
     /**
@@ -263,8 +192,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @return
      */
     @Override
-    public User getSafetyUser(User originUser) {
-        if (originUser == null) {
+    public User getSafetyUser(User originUser)
+    {
+        if (originUser == null)
+        {
             return null;
         }
         User safetyUser = new User();
@@ -277,7 +208,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         safetyUser.setEmail(originUser.getEmail());
         safetyUser.setSchoolCode(originUser.getSchoolCode());
         safetyUser.setUserRole(originUser.getUserRole());
-        safetyUser.setUserStatus(0);
+        safetyUser.setUserStatus(originUser.getUserStatus());
         safetyUser.setCreateTime(originUser.getCreateTime());
         safetyUser.setTags(originUser.getTags());
         return safetyUser;
@@ -289,105 +220,227 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @param request
      */
     @Override
-    public int userLogout(HttpServletRequest request) {
-        //移除登陆态
+    public int userLogout(HttpServletRequest request)
+    {
+        // 移除登录态
         request.getSession().removeAttribute(USER_LOGIN_STATE);
         return 1;
     }
 
     /**
-     * 根据标签搜索用户 (内存过滤)
+     * 根据标签搜索用户 BY java（灵活）  内存过滤
      *
-     * @param tagNameList 用户要拥有的标签
+     * @param tagNameList 用户拥有的标签
      * @return
      */
-    @Override
-    public List<User> searchUserByTags(List<String> tagNameList) {
-        if (CollectionUtils.isEmpty(tagNameList)) {
+    public List<User> searchUserByTags(List<String> tagNameList)
+    {
+        if (CollectionUtil.isEmpty(tagNameList))
+        {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        //1. 先查询所有用户
-        QueryWrapper queryWrapper = new QueryWrapper<>();
-        List<User> userList = userMapper.selectList(queryWrapper);
+
+        // 查询出所有用户
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        List<User> javauserList = userMapper.selectList(queryWrapper);
+        // 在内存中处理
         Gson gson = new Gson();
-        //2. 在内存中判断是否包含要求的标签
-        return userList.stream().filter(user -> {
-            String tagsStr = user.getTags();
-            if (StringUtils.isBlank(tagsStr)) {
+        // 用户集合筛选
+        List<User> collectUserList = javauserList.stream().filter(user ->
+        {
+            // 该用户的所有标签
+            String tags = user.getTags();
+            if (StrUtil.isBlank(tags))  // 如果该用户无标签
+            {
                 return false;
             }
-            Set<String> tempTagNameSet = gson.fromJson(tagsStr, new TypeToken<Set<String>>() {
+            // 标签集合 string
+            Set<String> tagSet = gson.fromJson(tags, new TypeToken<Set<String>>()
+            {
             }.getType());
-            tempTagNameSet = Optional.ofNullable(tempTagNameSet).orElse(new HashSet<>());
-            for (String tagName : tempTagNameSet) {
-                if (!tempTagNameSet.contains(tagName)) {
+            // Tag tag = JSONUtil.toBean(tags, List.class);
+
+            // 遍历用户传递的 标签集合
+            for (String s : tagNameList)
+            {
+                // 一旦不存在该标签，就过滤掉
+                if (!tagSet.contains(s))
+                {
                     return false;
                 }
             }
             return true;
-        }).map(this::getSafetyUser).collect(Collectors.toList());
-        //return userList.stream().map(this::getSafetyUser).collect(Collectors.toList());
-
-    }
-
-    @Override
-    public int updateUser(@RequestBody User user, User loginUser) {
-        Long userId = user.getId();
-        if (userId <= 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        //如果是管理员，允许更新任意用户
-        //如果不是管理员，只允许更新当前（自己的）信息
-        if (!isAdmin(loginUser) && userId != loginUser.getId()) {
-            throw new BusinessException(ErrorCode.NO_AUTH);
-        }
-        User oldUser = userMapper.selectById(userId);
-        if (oldUser == null) {
-            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR);
-        }
-        return userMapper.updateById(user);
+        }).collect(Collectors.toList());
 
 
-    }
-
-    @Override
-    public User getLoginUser(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        if (userObj == null) {
-            throw new BusinessException(ErrorCode.NO_AUTH);
-        }
-        return (User) userObj;
+        // 转换数据为 safety
+        return collectUserList.stream().map(this::getSafetyUser).collect(Collectors.toList());
     }
 
 
     /**
-     * 根据标签搜索用户(SQL查询)
+     * 根据标签搜索用户 BY SQL （方便）
      *
-     * @param tagNameList
+     * @param tagNameList 用户拥有的标签
      * @return
      */
-    @Deprecated
-    private List<User> searchUserByTagsBySQL(List<String> tagNameList) {
-        if (CollectionUtils.isEmpty(tagNameList)) {
+    @Deprecated  // 不用
+    private List<User> searchUserByTagsBySQL(List<String> tagNameList)
+    {
+        if (CollectionUtil.isEmpty(tagNameList))
+        {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        //拼接 and 查询
-        for (String tagName : tagNameList) {
-            queryWrapper = queryWrapper.like("tags", tagName);
+
+
+        // 方法一：sql拼接
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        // 拼接 模糊查询
+        for (String tagName : tagNameList)
+        {
+            wrapper.like(User::getTags, tagName);
         }
-        List<User> userList = userMapper.selectList(queryWrapper);
+
+        List<User> userList = userMapper.selectList(wrapper);
         return userList.stream().map(this::getSafetyUser).collect(Collectors.toList());
-        //return userList.stream().map(this::getSafetyUser).collect(Collectors.toList());
 
     }
 
+    public User getCurrentUser(HttpServletRequest request)
+    {
+        if (request == null)
+        {
+            return null;
+        }
+        User currentUser = (User) request.getSession().getAttribute(USER_LOGIN_STATE);
 
+        if (currentUser == null)
+        {
+            throw new BusinessException(ErrorCode.NO_AUTH);
+
+        }
+        return currentUser;
+
+    }
+
+    /**
+     * 判断当前用户是否为管理员
+     *
+     * @param request
+     * @return
+     */
+    @Override
+    public boolean isAdmin(HttpServletRequest request)
+    {
+        // 仅管理员可查询
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        User user = (User) userObj;
+        return user != null && user.getUserRole() == ADMIN_ROLE;
+    }
+
+    /**
+     * 判断传入的用户是否为管理员
+     *
+     * @param currentUser
+     * @return
+     */
+    public boolean isAdmin(User currentUser)
+    {
+        return currentUser != null && currentUser.getUserRole() == ADMIN_ROLE;
+    }
+
+    @Override
+    public Integer updateUserById(User user, User currentUser)
+    {
+        long userId = user.getId();
+        if (userId <= 0)
+        {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        // 如果用户传递的信息中只有 id，则不触发更新，直接返回
+        Map<String, Object> map = BeanUtil.beanToMap(user, new HashMap<>(),
+                CopyOptions.create().setIgnoreNullValue(true)
+        );
+        // 仅仅只有 id 一个属性
+        if (map.size() == 1)
+        {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        // 1.权限校验(仅管理元 和 当前用户 可以修改)
+        if (!isAdmin(currentUser) && userId != currentUser.getId())
+        {
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        // 查询用户是否存在
+        User oldUser = userMapper.selectById(userId);
+        if (oldUser == null)
+        {
+            throw new BusinessException(ErrorCode.PARAMS_NULL_ERROR);
+        }
+        return userMapper.updateById(user);
+
+    }
+
+    @Override
+    public List<User> matchUsers(long num)
+    {
+        // 获取当前用户的 标签list
+        User currentUser = this.getCurrentUser(request);
+        String tags = currentUser.getTags();
+        Gson gson = new Gson();
+        List<String> currentTagList = gson.fromJson(tags, new TypeToken<List<String>>()
+        {
+        }.getType());
+
+        // 获取所有用户
+        // (优化)：过滤掉标签为空的用户、只查需要的信息
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.isNotNull(User::getTags);
+        wrapper.select(User::getId, User::getTags);
+        List<User> userList = this.list(wrapper);
+        // 用户列表下表 : 相似度权重
+        ArrayList<Pair<User, Long>> list = new ArrayList<>();
+        long max = 0;
+        for (int i = 0; i < userList.size(); i++)
+        {
+
+            // 依次获取用户，并取出tags，转换为 taglist
+            User user = userList.get(i);
+            String userTags = user.getTags();
+            if (StrUtil.isBlank(userTags) || user.getId()== currentUser.getId())
+            {
+                continue;
+            }
+            List<String> userTagList = gson.fromJson(userTags, new TypeToken<List<String>>()
+            {
+            }.getType());
+
+            // 进行相似度匹配，计算出权重
+            long distance = AlgorithmUtils.minDistance(currentTagList, userTagList);
+
+            // 添加进map
+            list.add(new Pair<>(user, distance));
+
+        }
+
+        // 取出前五个 pair
+        // 原生的sort性能更佳
+        list.sort((o1, o2) -> (int) (o1.getValue() - o2.getValue()));
+        List<Pair<User, Long>> topPairList = list.stream().limit(num).collect(Collectors.toList());
+
+        // 取出前五个 user，获取用户的完整信息，再脱敏
+        ArrayList<User> topUserList = new ArrayList<>();
+        for (Pair<User, Long> userLongPair : topPairList)
+        {
+            User user = userLongPair.getKey();
+            User fullUser = this.getById(user);
+            User safetyUser = this.getSafetyUser(fullUser);
+            topUserList.add(safetyUser);
+        }
+
+        return topUserList;
+    }
 }
-
-
-
 

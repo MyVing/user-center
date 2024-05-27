@@ -4,7 +4,7 @@ spring:
 # DataSource Config
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/user_center?useSSL=false
+    url: jdbc:mysql://localhost:3306/partner?useSSL=false&serverTimezone=UTC
     username: root
     password: 123456
   # session 失效时间
